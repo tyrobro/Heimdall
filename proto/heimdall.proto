@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package heimdall;
+option go_package = "./proto";
+
+service Node {
+    rpc GenerateHase (HashRequest) returns (HashResponse);
+}
+
+message HashRequest{
+    string input_data = 1;
+}
+
+message HashResponse {
+    string hash = 1;
+    string timestamp = 2;
+}
