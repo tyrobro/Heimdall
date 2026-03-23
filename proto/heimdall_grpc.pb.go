@@ -19,14 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Node_GenerateHase_FullMethodName = "/heimdall.Node/GenerateHase"
+	Node_GenerateHash_FullMethodName = "/heimdall.Node/GenerateHash"
 )
 
 // NodeClient is the client API for Node service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NodeClient interface {
-	GenerateHase(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*HashResponse, error)
+	GenerateHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*HashResponse, error)
 }
 
 type nodeClient struct {
@@ -37,10 +37,10 @@ func NewNodeClient(cc grpc.ClientConnInterface) NodeClient {
 	return &nodeClient{cc}
 }
 
-func (c *nodeClient) GenerateHase(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*HashResponse, error) {
+func (c *nodeClient) GenerateHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*HashResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HashResponse)
-	err := c.cc.Invoke(ctx, Node_GenerateHase_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Node_GenerateHash_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *nodeClient) GenerateHase(ctx context.Context, in *HashRequest, opts ...
 // All implementations must embed UnimplementedNodeServer
 // for forward compatibility.
 type NodeServer interface {
-	GenerateHase(context.Context, *HashRequest) (*HashResponse, error)
+	GenerateHash(context.Context, *HashRequest) (*HashResponse, error)
 	mustEmbedUnimplementedNodeServer()
 }
 
@@ -62,8 +62,8 @@ type NodeServer interface {
 // pointer dereference when methods are called.
 type UnimplementedNodeServer struct{}
 
-func (UnimplementedNodeServer) GenerateHase(context.Context, *HashRequest) (*HashResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GenerateHase not implemented")
+func (UnimplementedNodeServer) GenerateHash(context.Context, *HashRequest) (*HashResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GenerateHash not implemented")
 }
 func (UnimplementedNodeServer) mustEmbedUnimplementedNodeServer() {}
 func (UnimplementedNodeServer) testEmbeddedByValue()              {}
@@ -86,20 +86,20 @@ func RegisterNodeServer(s grpc.ServiceRegistrar, srv NodeServer) {
 	s.RegisterService(&Node_ServiceDesc, srv)
 }
 
-func _Node_GenerateHase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Node_GenerateHash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HashRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NodeServer).GenerateHase(ctx, in)
+		return srv.(NodeServer).GenerateHash(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Node_GenerateHase_FullMethodName,
+		FullMethod: Node_GenerateHash_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServer).GenerateHase(ctx, req.(*HashRequest))
+		return srv.(NodeServer).GenerateHash(ctx, req.(*HashRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -112,8 +112,8 @@ var Node_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*NodeServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GenerateHase",
-			Handler:    _Node_GenerateHase_Handler,
+			MethodName: "GenerateHash",
+			Handler:    _Node_GenerateHash_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

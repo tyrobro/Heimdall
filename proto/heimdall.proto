@@ -4,7 +4,7 @@ package heimdall;
 option go_package = "./proto";
 
 service Node {
-    rpc GenerateHase (HashRequest) returns (HashResponse);
+    rpc GenerateHash (HashRequest) returns (HashResponse);
 }
 
 message HashRequest{

@@ -129,7 +129,7 @@ const file_proto_heimdall_proto_rawDesc = "" +
 	"\x04hash\x18\x01 \x01(\tR\x04hash\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp2E\n" +
 	"\x04Node\x12=\n" +
-	"\fGenerateHase\x12\x15.heimdall.HashRequest\x1a\x16.heimdall.HashResponseB\tZ\a./protob\x06proto3"
+	"\fGenerateHash\x12\x15.heimdall.HashRequest\x1a\x16.heimdall.HashResponseB\tZ\a./protob\x06proto3"
 
 var (
 	file_proto_heimdall_proto_rawDescOnce sync.Once
@@ -149,8 +149,8 @@ var file_proto_heimdall_proto_goTypes = []any{
 	(*HashResponse)(nil), // 1: heimdall.HashResponse
 }
 var file_proto_heimdall_proto_depIdxs = []int32{
-	0, // 0: heimdall.Node.GenerateHase:input_type -> heimdall.HashRequest
-	1, // 1: heimdall.Node.GenerateHase:output_type -> heimdall.HashResponse
+	0, // 0: heimdall.Node.GenerateHash:input_type -> heimdall.HashRequest
+	1, // 1: heimdall.Node.GenerateHash:output_type -> heimdall.HashResponse
 	1, // [1:2] is the sub-list for method output_type
 	0, // [0:1] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
