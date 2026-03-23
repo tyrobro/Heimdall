@@ -6,4 +6,4 @@
 *.dylib
 
 # OS specific
-.DS_Store
+._.DS_Store
