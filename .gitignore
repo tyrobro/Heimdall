@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-go.mod
-go.sum
+*.mod
+*.sum
 # OS specific
 .DS_Store
 *.DS_Store
