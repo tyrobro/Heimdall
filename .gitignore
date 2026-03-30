@@ -17,3 +17,6 @@ metadata.db
 
 # Dummy text files created by our test scripts
 *.txt
+
+# Heimdall Write-Ahead Log
+*.wal
