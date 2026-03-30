@@ -19,103 +19,137 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Node_GenerateHash_FullMethodName = "/heimdall.Node/GenerateHash"
+	DataService_WriteAction_FullMethodName = "/heimdall.DataService/WriteAction"
+	DataService_ReadAction_FullMethodName  = "/heimdall.DataService/ReadAction"
 )
 
-// NodeClient is the client API for Node service.
+// DataServiceClient is the client API for DataService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type NodeClient interface {
-	GenerateHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*HashResponse, error)
+type DataServiceClient interface {
+	WriteAction(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[WriteRequest, WriteResponse], error)
+	ReadAction(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadResponse], error)
 }
 
-type nodeClient struct {
+type dataServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewNodeClient(cc grpc.ClientConnInterface) NodeClient {
-	return &nodeClient{cc}
+func NewDataServiceClient(cc grpc.ClientConnInterface) DataServiceClient {
+	return &dataServiceClient{cc}
 }
 
-func (c *nodeClient) GenerateHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*HashResponse, error) {
+func (c *dataServiceClient) WriteAction(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[WriteRequest, WriteResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HashResponse)
-	err := c.cc.Invoke(ctx, Node_GenerateHash_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &DataService_ServiceDesc.Streams[0], DataService_WriteAction_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[WriteRequest, WriteResponse]{ClientStream: stream}
+	return x, nil
 }
 
-// NodeServer is the server API for Node service.
-// All implementations must embed UnimplementedNodeServer
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DataService_WriteActionClient = grpc.ClientStreamingClient[WriteRequest, WriteResponse]
+
+func (c *dataServiceClient) ReadAction(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &DataService_ServiceDesc.Streams[1], DataService_ReadAction_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ReadRequest, ReadResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DataService_ReadActionClient = grpc.ServerStreamingClient[ReadResponse]
+
+// DataServiceServer is the server API for DataService service.
+// All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
-type NodeServer interface {
-	GenerateHash(context.Context, *HashRequest) (*HashResponse, error)
-	mustEmbedUnimplementedNodeServer()
+type DataServiceServer interface {
+	WriteAction(grpc.ClientStreamingServer[WriteRequest, WriteResponse]) error
+	ReadAction(*ReadRequest, grpc.ServerStreamingServer[ReadResponse]) error
+	mustEmbedUnimplementedDataServiceServer()
 }
 
-// UnimplementedNodeServer must be embedded to have
+// UnimplementedDataServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedNodeServer struct{}
+type UnimplementedDataServiceServer struct{}
 
-func (UnimplementedNodeServer) GenerateHash(context.Context, *HashRequest) (*HashResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GenerateHash not implemented")
+func (UnimplementedDataServiceServer) WriteAction(grpc.ClientStreamingServer[WriteRequest, WriteResponse]) error {
+	return status.Error(codes.Unimplemented, "method WriteAction not implemented")
 }
-func (UnimplementedNodeServer) mustEmbedUnimplementedNodeServer() {}
-func (UnimplementedNodeServer) testEmbeddedByValue()              {}
+func (UnimplementedDataServiceServer) ReadAction(*ReadRequest, grpc.ServerStreamingServer[ReadResponse]) error {
+	return status.Error(codes.Unimplemented, "method ReadAction not implemented")
+}
+func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
+func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
 
-// UnsafeNodeServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to NodeServer will
+// UnsafeDataServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to DataServiceServer will
 // result in compilation errors.
-type UnsafeNodeServer interface {
-	mustEmbedUnimplementedNodeServer()
+type UnsafeDataServiceServer interface {
+	mustEmbedUnimplementedDataServiceServer()
 }
 
-func RegisterNodeServer(s grpc.ServiceRegistrar, srv NodeServer) {
-	// If the following call panics, it indicates UnimplementedNodeServer was
+func RegisterDataServiceServer(s grpc.ServiceRegistrar, srv DataServiceServer) {
+	// If the following call panics, it indicates UnimplementedDataServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&Node_ServiceDesc, srv)
+	s.RegisterService(&DataService_ServiceDesc, srv)
 }
 
-func _Node_GenerateHash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HashRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServer).GenerateHash(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Node_GenerateHash_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServer).GenerateHash(ctx, req.(*HashRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+func _DataService_WriteAction_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(DataServiceServer).WriteAction(&grpc.GenericServerStream[WriteRequest, WriteResponse]{ServerStream: stream})
 }
 
-// Node_ServiceDesc is the grpc.ServiceDesc for Node service.
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DataService_WriteActionServer = grpc.ClientStreamingServer[WriteRequest, WriteResponse]
+
+func _DataService_ReadAction_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ReadRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DataServiceServer).ReadAction(m, &grpc.GenericServerStream[ReadRequest, ReadResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DataService_ReadActionServer = grpc.ServerStreamingServer[ReadResponse]
+
+// DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Node_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "heimdall.Node",
-	HandlerType: (*NodeServer)(nil),
-	Methods: []grpc.MethodDesc{
+var DataService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "heimdall.DataService",
+	HandlerType: (*DataServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "GenerateHash",
-			Handler:    _Node_GenerateHash_Handler,
+			StreamName:    "WriteAction",
+			Handler:       _DataService_WriteAction_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ReadAction",
+			Handler:       _DataService_ReadAction_Handler,
+			ServerStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/heimdall.proto",
 }

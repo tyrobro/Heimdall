@@ -3,15 +3,33 @@ syntax = "proto3";
 package heimdall;
 option go_package = "./proto";
 
-service Node {
-    rpc GenerateHash (HashRequest) returns (HashResponse);
+service DataService{
+    rpc WriteAction (stream WriteRequest) returns (WriteResponse);
+    rpc ReadAction (ReadRequest) returns (stream ReadResponse);
 }
 
-message HashRequest{
-    string input_data = 1;
+message WriteRequest {
+    oneof request {
+        FileMetadata metadata = 1;
+        bytes chunk_data = 2;
+    }
 }
 
-message HashResponse {
-    string hash = 1;
-    string timestamp = 2;
+message FileMetadata {
+    string file_name = 1;
+}
+
+message WriteResponse {
+    bool success = 1;
+    int64 timestamp = 2;
+    string message = 3;
+}
+
+message ReadRequest {
+    string file_name = 1;
+    int64 timestamp = 2;
+}
+
+message ReadResponse {
+    bytes chunk_data = 1;
 }
