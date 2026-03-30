@@ -7,3 +7,12 @@
 
 # OS specific
 .DS_Store
+*.DS_Store
+# Heimdall Local Database
+metadata.db
+
+# Heimdall Raw File Chunks
+/disk_storage/
+
+# Dummy text files created by our test scripts
+*.txt
