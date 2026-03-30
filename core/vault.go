@@ -14,6 +14,15 @@ var db *bbolt.DB
 
 const storageDir = "disk_storage"
 
+type FileVersion struct {
+	Timestamp int64    `json:"timestamp"`
+	Hashes    []string `json:"hashes"`
+}
+
+type FileHistory struct {
+	Versions []FileVersion `json:"versions"`
+}
+
 func InitVault() error {
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
 		return fmt.Errorf("failed to create storage dir: %w", err)
@@ -37,7 +46,7 @@ func CloseVault() {
 	}
 }
 
-func SaveFile(filePath, fileName string) error {
+func SaveFile(filePath, fileName string, timestamp int64) error {
 	chunks, err := ChunkFile(filePath)
 	if err != nil {
 		return err
@@ -54,6 +63,7 @@ func SaveFile(filePath, fileName string) error {
 	for _, chunk := range chunks {
 		hashList = append(hashList, chunk.Hash)
 		chunkPath := filepath.Join(storageDir, chunk.Hash)
+
 		if _, err := os.Stat(chunkPath); os.IsNotExist(err) {
 			chunkData := make([]byte, chunk.Length)
 			originalFile.ReadAt(chunkData, int64(chunk.Offset))
@@ -61,15 +71,27 @@ func SaveFile(filePath, fileName string) error {
 		}
 	}
 
-	recipeBytes, _ := json.Marshal(hashList)
 	return db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("FileMeta"))
-		return b.Put([]byte(fileName), recipeBytes)
+
+		var history FileHistory
+		existingData := b.Get([]byte(fileName))
+		if existingData != nil {
+			json.Unmarshal(existingData, &history)
+		}
+
+		history.Versions = append(history.Versions, FileVersion{
+			Timestamp: timestamp,
+			Hashes:    hashList,
+		})
+
+		newBytes, _ := json.Marshal(history)
+		return b.Put([]byte(fileName), newBytes)
 	})
 }
 
-func RestoreFile(fileName, outputPath string) error {
-	var hashList []string
+func RestoreFile(fileName, outputPath string, targetTimestamp int64) error {
+	var targetHashes []string
 
 	err := db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("FileMeta"))
@@ -77,8 +99,19 @@ func RestoreFile(fileName, outputPath string) error {
 		if recipeBytes == nil {
 			return fmt.Errorf("file '%s' not found in metadata", fileName)
 		}
-		return json.Unmarshal(recipeBytes, &hashList)
+
+		var history FileHistory
+		json.Unmarshal(recipeBytes, &history)
+
+		for i := len(history.Versions) - 1; i >= 0; i-- {
+			if history.Versions[i].Timestamp <= targetTimestamp {
+				targetHashes = history.Versions[i].Hashes
+				return nil
+			}
+		}
+		return fmt.Errorf("no version of '%s' existed at timestamp %d", fileName, targetTimestamp)
 	})
+
 	if err != nil {
 		return err
 	}
@@ -89,7 +122,7 @@ func RestoreFile(fileName, outputPath string) error {
 	}
 	defer outFile.Close()
 
-	for _, hash := range hashList {
+	for _, hash := range targetHashes {
 		chunkPath := filepath.Join(storageDir, hash)
 		chunkFile, err := os.Open(chunkPath)
 		if err != nil {
