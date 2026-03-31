@@ -29,17 +29,35 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 		return err
 	}
 
-	req, err := stream.Recv()
+	packet1, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	fileName := "unknown"
+	if meta := packet1.GetMetadata(); meta != nil {
+		fileName = meta.FileName
+	}
+
+	packet2, err := stream.Recv()
 	if err != nil {
 		return err
 	}
 
-	fileName := "unknown"
-	if meta := req.GetMetadata(); meta != nil {
-		fileName = meta.FileName
+	chunk := packet2.GetChunkData()
+	var magicBytes []byte
+	if len(chunk) > 512 {
+		magicBytes = chunk[:512]
+	} else {
+		magicBytes = chunk
 	}
 
-	if err := backendStream.Send(req); err != nil {
+	prediction := PredictWorkload(fileName, magicBytes)
+	log.Printf("ML Brain predicted [%s] as: %s", fileName, prediction)
+
+	if err := backendStream.Send(packet1); err != nil {
+		return err
+	}
+	if err := backendStream.Send(packet2); err != nil {
 		return err
 	}
 
@@ -50,10 +68,7 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 			if err != nil {
 				return err
 			}
-
 			LogEvent(fileName, "WRITE")
-			log.Printf("Logged WRITE event for: %s", fileName)
-
 			return stream.SendAndClose(res)
 		}
 		if err != nil {
