@@ -135,3 +135,30 @@ func RestoreFile(fileName, outputPath string, targetTimestamp int64) error {
 
 	return nil
 }
+
+func GetFileRecipe(fileName string, targetTimestamp int64) ([]string, error) {
+	var targetHashes []string
+
+	err := db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("FileMeta"))
+		recipeBytes := b.Get([]byte(fileName))
+		if recipeBytes == nil {
+			return fmt.Errorf("file '%s' not found in metadata", fileName)
+		}
+
+		var history FileHistory
+		json.Unmarshal(recipeBytes, &history)
+
+		for i := len(history.Versions) - 1; i >= 0; i-- {
+			if history.Versions[i].Timestamp <= targetTimestamp {
+				targetHashes = history.Versions[i].Hashes
+				return nil
+			}
+		}
+
+		return fmt.Errorf("no version of '%s' existed at timestamp %d", fileName, targetTimestamp)
+	})
+
+	return targetHashes, err
+
+}
