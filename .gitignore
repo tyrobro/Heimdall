@@ -20,3 +20,6 @@ metadata.db
 
 # Heimdall Write-Ahead Log
 *.wal
+
+# Heimdall Network Stream Buffers
+temp_*
