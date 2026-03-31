@@ -22,11 +22,24 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 		return err
 	}
 	defer conn.Close()
-
 	client := pb.NewDataServiceClient(conn)
 
 	backendStream, err := client.WriteAction(context.Background())
 	if err != nil {
+		return err
+	}
+
+	req, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+
+	fileName := "unknown"
+	if meta := req.GetMetadata(); meta != nil {
+		fileName = meta.FileName
+	}
+
+	if err := backendStream.Send(req); err != nil {
 		return err
 	}
 
@@ -37,6 +50,10 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 			if err != nil {
 				return err
 			}
+
+			LogEvent(fileName, "WRITE")
+			log.Printf("Logged WRITE event for: %s", fileName)
+
 			return stream.SendAndClose(res)
 		}
 		if err != nil {
@@ -55,20 +72,26 @@ func (s *gatewayServer) ReadAction(req *pb.ReadRequest, stream pb.DataService_Re
 		return err
 	}
 	defer conn.Close()
-
 	client := pb.NewDataServiceClient(conn)
+
 	backendStream, err := client.ReadAction(context.Background(), req)
 	if err != nil {
 		return err
 	}
+
+	fileName := req.GetFileName()
+
 	for {
 		res, err := backendStream.Recv()
 		if err == io.EOF {
+			LogEvent(fileName, "READ")
+			log.Printf("Logged READ event for: %s", fileName)
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+
 		if err := stream.Send(res); err != nil {
 			return err
 		}
@@ -76,6 +99,11 @@ func (s *gatewayServer) ReadAction(req *pb.ReadRequest, stream pb.DataService_Re
 }
 
 func main() {
+	if err := InitTelemetry(); err != nil {
+		log.Fatalf("Failed to initialize telemetry: %v", err)
+	}
+	defer CloseTelemetry()
+
 	port := ":50050"
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
@@ -85,7 +113,7 @@ func main() {
 	s := grpc.NewServer()
 	pb.RegisterDataServiceServer(s, &gatewayServer{})
 
-	log.Printf("Heimdall Gateway is routing traffic on post %s", port)
+	log.Printf("Heimdall Gateway routing traffic & logging telemetry on port %s...", port)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Gateway failed to serve: %v", err)
 	}

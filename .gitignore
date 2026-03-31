@@ -23,3 +23,6 @@ metadata.db
 
 # Heimdall Network Stream Buffers
 temp_*
+
+# Telemetry Logs
+telemetry.csv
