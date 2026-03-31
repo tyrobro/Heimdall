@@ -1,8 +1,8 @@
 package core
 
 import (
-	"encoding/json"
-	"fmt"
+	"encoding/binary"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -19,36 +19,84 @@ var walMutex sync.Mutex
 var processQueue chan LogEntry
 
 func InitWAL() error {
-	var err error
-	walFile, err = os.OpenFile("heimdall.wal", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err := ReplayWAL(); err != nil {
+		return err
+	}
+	log.Println("WAL System Initialized.")
+	return nil
+}
+
+func AsyncSave(tempPath string, fileName string, ts int64) error {
+	data, err := os.ReadFile(tempPath)
 	if err != nil {
 		return err
 	}
 
-	processQueue = make(chan LogEntry, 10000)
-	go backgroundProcessor()
+	f, err := os.OpenFile("heimdall.wal", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	binary.Write(f, binary.LittleEndian, ts)
+	binary.Write(f, binary.LittleEndian, int32(len(fileName)))
+	f.WriteString(fileName)
+	binary.Write(f, binary.LittleEndian, int32(len(data)))
+	f.Write(data)
+
+	go func() {
+		err := SaveFile(tempPath, fileName, ts)
+		if err != nil {
+			log.Printf("Background Vault save failed for %s: %v", fileName, err)
+		}
+	}()
+
 	return nil
 }
 
-func AsyncSave(filePath, fileName string, timestamp int64) error {
-	entry := LogEntry{
-		Timestamp: timestamp,
-		FileName:  fileName,
-		FilePath:  filePath,
-	}
-
-	data, _ := json.Marshal(entry)
-	data = append(data, '\n')
-
-	walMutex.Lock()
-	_, err := walFile.Write(data)
-	walMutex.Unlock()
-
+func ReplayWAL() error {
+	file, err := os.Open("heimdall.wal")
 	if err != nil {
-		return fmt.Errorf("WAL write failed: %w", err)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer file.Close()
+
+	log.Println("WAL detected. Checking for uncommitted transactions...")
+
+	for {
+		var ts int64
+		var nameLen, dataLen int32
+
+		err := binary.Read(file, binary.LittleEndian, &ts)
+		if err == io.EOF {
+			break
+		}
+
+		binary.Read(file, binary.LittleEndian, &nameLen)
+		nameBuf := make([]byte, nameLen)
+		file.Read(nameBuf)
+		fileName := string(nameBuf)
+
+		binary.Read(file, binary.LittleEndian, &dataLen)
+		dataBuf := make([]byte, dataLen)
+		file.Read(dataBuf)
+
+		_, err = GetFileRecipe(fileName, ts)
+		if err != nil {
+			log.Printf("Recovering transaction: %s (TS: %d)", fileName, ts)
+
+			tmpName := "recovery_" + fileName
+			os.WriteFile(tmpName, dataBuf, 0644)
+
+			SaveFile(tmpName, fileName, ts)
+			os.Remove(tmpName)
+		}
 	}
 
-	processQueue <- entry
+	log.Println("WAL Replay sequence complete.")
 	return nil
 }
 

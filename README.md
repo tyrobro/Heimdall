@@ -104,9 +104,9 @@ Serves point-in-time reads using MVCC snapshot isolation. Hot data is served dir
 A `sync.Mutex`-protected counter that issues monotonically increasing transaction IDs. Provides the version timestamps underpinning MVCC snapshot isolation. Verified under 1000 concurrent goroutines in the unit test suite.
 
 ### Inference Tier `ml_service/`
-An experimental FastAPI microservice. Accepts the first 512 bytes of each incoming stream and encodes them into a fixed-length feature vector via `HashingVectorizer`. An `SGDClassifier` predicts whether the file structure correlates with read-heavy or write-heavy telemetry patterns, informing downstream caching strategy. Achieves ~84% accuracy on a synthetic validation set of 500 samples across 6 file types (CSV, JSON, PNG, MP4, EXE, PDF), stratified 80/20 train/validation split. The model retrains asynchronously as new telemetry accumulates.
+An experimental FastAPI microservice. Accepts the first 512 bytes of each incoming stream and encodes them into a fixed-length feature vector via `HashingVectorizer`. An `SGDClassifier` predicts whether the file structure correlates with read-heavy or write-heavy telemetry patterns, informing downstream caching strategy. The model retrains asynchronously as new telemetry accumulates.
 
-> **Note:** The inference tier is a proof-of-concept for online-learning telemetry loops. It is not on the critical path — a timeout or crash degrades gracefully to default routing.
+> **Note:** The inference tier is a proof-of-concept for online-learning telemetry loops. Model accuracy has not yet been formally evaluated. It is not on the critical path — a timeout or crash degrades gracefully to default routing.
 
 ---
 
@@ -274,7 +274,7 @@ The speedup reflects the mechanical advantage of sequential I/O over random disk
 The WAL retains data on disk across crashes, but a replay-on-reboot mechanism has not yet been implemented. This is the most significant gap in the current durability model.
 
 **ML validation gate**
-The continuous learning loop retrains on incoming telemetry without a held-out validation set. A degraded telemetry batch can silently reduce routing accuracy. A future iteration should enforce an accuracy threshold check before hot-swapping model weights.
+The continuous learning loop retrains on incoming telemetry without a held-out validation set, and model accuracy has not been formally measured. A degraded telemetry batch can silently reduce routing quality with no observable signal. Future iterations should introduce a labelled evaluation set of real file samples and enforce an accuracy threshold check before hot-swapping model weights.
 
 **Cluster consensus**
 Nodes are addressed via hardcoded localhost ports. Production deployment requires service discovery (e.g., Consul) and a consensus protocol (e.g., Raft) for leader election and node health management.
