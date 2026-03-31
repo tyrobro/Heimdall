@@ -6,11 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.etcd.io/bbolt"
 )
-
-var db *bbolt.DB
 
 const storageDir = "disk_storage"
 
@@ -24,29 +23,12 @@ type FileHistory struct {
 }
 
 func InitVault() error {
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		return fmt.Errorf("failed to create storage dir: %w", err)
-	}
-
-	var err error
-	db, err = bbolt.Open("metadata.db", 0600, nil)
-	if err != nil {
-		return fmt.Errorf("failed to open boltdb: %w", err)
-	}
-
-	return db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("FileMeta"))
-		return err
-	})
+	return os.MkdirAll(storageDir, 0755)
 }
 
-func CloseVault() {
-	if db != nil {
-		db.Close()
-	}
-}
+func CloseVault() {}
 
-func SaveFile(filePath, fileName string, timestamp int64) error {
+func SaveFile(filePath string, fileName string, timestamp int64) error {
 	chunks, err := ChunkFile(filePath)
 	if err != nil {
 		return err
@@ -71,8 +53,17 @@ func SaveFile(filePath, fileName string, timestamp int64) error {
 		}
 	}
 
+	db, err := bbolt.Open("metadata.db", 0600, &bbolt.Options{Timeout: 2 * time.Second})
+	if err != nil {
+		return fmt.Errorf("failed to open boltdb for writing: %w", err)
+	}
+	defer db.Close()
+
 	return db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte("FileMeta"))
+		b, err := tx.CreateBucketIfNotExists([]byte("FileMeta"))
+		if err != nil {
+			return err
+		}
 
 		var history FileHistory
 		existingData := b.Get([]byte(fileName))
@@ -90,11 +81,21 @@ func SaveFile(filePath, fileName string, timestamp int64) error {
 	})
 }
 
-func RestoreFile(fileName, outputPath string, targetTimestamp int64) error {
+func GetFileRecipe(fileName string, targetTimestamp int64) ([]string, error) {
 	var targetHashes []string
 
-	err := db.View(func(tx *bbolt.Tx) error {
+	db, err := bbolt.Open("metadata.db", 0600, &bbolt.Options{Timeout: 2 * time.Second, ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open boltdb for reading: %w", err)
+	}
+	defer db.Close()
+
+	err = db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("FileMeta"))
+		if b == nil {
+			return fmt.Errorf("database bucket not initialized")
+		}
+
 		recipeBytes := b.Get([]byte(fileName))
 		if recipeBytes == nil {
 			return fmt.Errorf("file '%s' not found in metadata", fileName)
@@ -112,6 +113,11 @@ func RestoreFile(fileName, outputPath string, targetTimestamp int64) error {
 		return fmt.Errorf("no version of '%s' existed at timestamp %d", fileName, targetTimestamp)
 	})
 
+	return targetHashes, err
+}
+
+func RestoreFile(fileName string, outputPath string, targetTimestamp int64) error {
+	targetHashes, err := GetFileRecipe(fileName, targetTimestamp)
 	if err != nil {
 		return err
 	}
@@ -128,37 +134,8 @@ func RestoreFile(fileName, outputPath string, targetTimestamp int64) error {
 		if err != nil {
 			return fmt.Errorf("missing chunk %s: %w", hash, err)
 		}
-
 		io.Copy(outFile, chunkFile)
 		chunkFile.Close()
 	}
-
 	return nil
-}
-
-func GetFileRecipe(fileName string, targetTimestamp int64) ([]string, error) {
-	var targetHashes []string
-
-	err := db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte("FileMeta"))
-		recipeBytes := b.Get([]byte(fileName))
-		if recipeBytes == nil {
-			return fmt.Errorf("file '%s' not found in metadata", fileName)
-		}
-
-		var history FileHistory
-		json.Unmarshal(recipeBytes, &history)
-
-		for i := len(history.Versions) - 1; i >= 0; i-- {
-			if history.Versions[i].Timestamp <= targetTimestamp {
-				targetHashes = history.Versions[i].Hashes
-				return nil
-			}
-		}
-
-		return fmt.Errorf("no version of '%s' existed at timestamp %d", fileName, targetTimestamp)
-	})
-
-	return targetHashes, err
-
 }

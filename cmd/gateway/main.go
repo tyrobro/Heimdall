@@ -76,7 +76,7 @@ func (s *gatewayServer) ReadAction(req *pb.ReadRequest, stream pb.DataService_Re
 }
 
 func main() {
-	port := "50050"
+	port := ":50050"
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("Gateway failed to listen: %v", err)
