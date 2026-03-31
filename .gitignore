@@ -26,3 +26,23 @@ temp_*
 
 # Telemetry Logs
 telemetry.csv
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Go compilation outputs
+*.exe
+*.test
+*.out
+
+# Heimdall State & Storage (CRITICAL)
+metadata.db
+heimdall.wal
+disk_storage/
+
+# Machine Learning & Telemetry Data
+telemetry.csv
+ml_service/venv/
+ml_service/__pycache__/
+*.pyc
