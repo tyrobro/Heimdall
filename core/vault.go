@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	pb "heimdall/proto"
 
 	"go.etcd.io/bbolt"
 )
@@ -102,7 +105,9 @@ func GetFileRecipe(fileName string, targetTimestamp int64) ([]string, error) {
 		}
 
 		var history FileHistory
-		json.Unmarshal(recipeBytes, &history)
+		if err := json.Unmarshal(recipeBytes, &history); err != nil {
+			return fmt.Errorf("metadata for file '%s' is corrupted: %w", fileName, err)
+		}
 
 		for i := len(history.Versions) - 1; i >= 0; i-- {
 			if history.Versions[i].Timestamp <= targetTimestamp {
@@ -138,4 +143,41 @@ func RestoreFile(fileName string, outputPath string, targetTimestamp int64) erro
 		chunkFile.Close()
 	}
 	return nil
+}
+
+func GetAllFiles() (map[string]*pb.VersionList, error) {
+	result := make(map[string]*pb.VersionList)
+
+	db, err := bbolt.Open("metadata.db", 0600, &bbolt.Options{Timeout: 2 * time.Second, ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open boltdb for reading: %w", err)
+	}
+	defer db.Close()
+
+	err = db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("FileMeta"))
+		if b == nil {
+			return nil
+		}
+
+		return b.ForEach(func(k, v []byte) error {
+			fileName := string(k)
+			var history FileHistory
+
+			if err := json.Unmarshal(v, &history); err != nil {
+				log.Printf("Skipping legacy/corrupted data for file [%s]: %v", fileName, err)
+				return nil
+			}
+
+			var timestamps []int64
+			for _, version := range history.Versions {
+				timestamps = append(timestamps, version.Timestamp)
+			}
+
+			result[fileName] = &pb.VersionList{Timestamps: timestamps}
+			return nil
+		})
+	})
+
+	return result, err
 }

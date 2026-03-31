@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	DataService_WriteAction_FullMethodName = "/heimdall.DataService/WriteAction"
 	DataService_ReadAction_FullMethodName  = "/heimdall.DataService/ReadAction"
+	DataService_ListFiles_FullMethodName   = "/heimdall.DataService/ListFiles"
 )
 
 // DataServiceClient is the client API for DataService service.
@@ -29,6 +30,7 @@ const (
 type DataServiceClient interface {
 	WriteAction(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[WriteRequest, WriteResponse], error)
 	ReadAction(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadResponse], error)
+	ListFiles(ctx context.Context, in *EmptyRequest, opts ...grpc.CallOption) (*ListResponse, error)
 }
 
 type dataServiceClient struct {
@@ -71,12 +73,23 @@ func (c *dataServiceClient) ReadAction(ctx context.Context, in *ReadRequest, opt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DataService_ReadActionClient = grpc.ServerStreamingClient[ReadResponse]
 
+func (c *dataServiceClient) ListFiles(ctx context.Context, in *EmptyRequest, opts ...grpc.CallOption) (*ListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResponse)
+	err := c.cc.Invoke(ctx, DataService_ListFiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServiceServer is the server API for DataService service.
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
 type DataServiceServer interface {
 	WriteAction(grpc.ClientStreamingServer[WriteRequest, WriteResponse]) error
 	ReadAction(*ReadRequest, grpc.ServerStreamingServer[ReadResponse]) error
+	ListFiles(context.Context, *EmptyRequest) (*ListResponse, error)
 	mustEmbedUnimplementedDataServiceServer()
 }
 
@@ -92,6 +105,9 @@ func (UnimplementedDataServiceServer) WriteAction(grpc.ClientStreamingServer[Wri
 }
 func (UnimplementedDataServiceServer) ReadAction(*ReadRequest, grpc.ServerStreamingServer[ReadResponse]) error {
 	return status.Error(codes.Unimplemented, "method ReadAction not implemented")
+}
+func (UnimplementedDataServiceServer) ListFiles(context.Context, *EmptyRequest) (*ListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListFiles not implemented")
 }
 func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
 func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
@@ -132,13 +148,36 @@ func _DataService_ReadAction_Handler(srv interface{}, stream grpc.ServerStream) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DataService_ReadActionServer = grpc.ServerStreamingServer[ReadResponse]
 
+func _DataService_ListFiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmptyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).ListFiles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_ListFiles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).ListFiles(ctx, req.(*EmptyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var DataService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "heimdall.DataService",
 	HandlerType: (*DataServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListFiles",
+			Handler:    _DataService_ListFiles_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "WriteAction",

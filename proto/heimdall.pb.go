@@ -303,6 +303,130 @@ func (x *ReadResponse) GetChunkData() []byte {
 	return nil
 }
 
+type EmptyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmptyRequest) Reset() {
+	*x = EmptyRequest{}
+	mi := &file_proto_heimdall_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmptyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmptyRequest) ProtoMessage() {}
+
+func (x *EmptyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_heimdall_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmptyRequest.ProtoReflect.Descriptor instead.
+func (*EmptyRequest) Descriptor() ([]byte, []int) {
+	return file_proto_heimdall_proto_rawDescGZIP(), []int{5}
+}
+
+type VersionList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Timestamps    []int64                `protobuf:"varint,1,rep,packed,name=timestamps,proto3" json:"timestamps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VersionList) Reset() {
+	*x = VersionList{}
+	mi := &file_proto_heimdall_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VersionList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VersionList) ProtoMessage() {}
+
+func (x *VersionList) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_heimdall_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VersionList.ProtoReflect.Descriptor instead.
+func (*VersionList) Descriptor() ([]byte, []int) {
+	return file_proto_heimdall_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *VersionList) GetTimestamps() []int64 {
+	if x != nil {
+		return x.Timestamps
+	}
+	return nil
+}
+
+type ListResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Files         map[string]*VersionList `protobuf:"bytes,1,rep,name=files,proto3" json:"files,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListResponse) Reset() {
+	*x = ListResponse{}
+	mi := &file_proto_heimdall_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListResponse) ProtoMessage() {}
+
+func (x *ListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_heimdall_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListResponse.ProtoReflect.Descriptor instead.
+func (*ListResponse) Descriptor() ([]byte, []int) {
+	return file_proto_heimdall_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ListResponse) GetFiles() map[string]*VersionList {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
 var File_proto_heimdall_proto protoreflect.FileDescriptor
 
 const file_proto_heimdall_proto_rawDesc = "" +
@@ -324,11 +448,23 @@ const file_proto_heimdall_proto_rawDesc = "" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\"-\n" +
 	"\fReadResponse\x12\x1d\n" +
 	"\n" +
-	"chunk_data\x18\x01 \x01(\fR\tchunkData2\x8e\x01\n" +
+	"chunk_data\x18\x01 \x01(\fR\tchunkData\"\x0e\n" +
+	"\fEmptyRequest\"-\n" +
+	"\vVersionList\x12\x1e\n" +
+	"\n" +
+	"timestamps\x18\x01 \x03(\x03R\n" +
+	"timestamps\"\x98\x01\n" +
+	"\fListResponse\x127\n" +
+	"\x05files\x18\x01 \x03(\v2!.heimdall.ListResponse.FilesEntryR\x05files\x1aO\n" +
+	"\n" +
+	"FilesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.heimdall.VersionListR\x05value:\x028\x012\xcb\x01\n" +
 	"\vDataService\x12@\n" +
 	"\vWriteAction\x12\x16.heimdall.WriteRequest\x1a\x17.heimdall.WriteResponse(\x01\x12=\n" +
 	"\n" +
-	"ReadAction\x12\x15.heimdall.ReadRequest\x1a\x16.heimdall.ReadResponse0\x01B\tZ\a./protob\x06proto3"
+	"ReadAction\x12\x15.heimdall.ReadRequest\x1a\x16.heimdall.ReadResponse0\x01\x12;\n" +
+	"\tListFiles\x12\x16.heimdall.EmptyRequest\x1a\x16.heimdall.ListResponseB\tZ\a./protob\x06proto3"
 
 var (
 	file_proto_heimdall_proto_rawDescOnce sync.Once
@@ -342,25 +478,33 @@ func file_proto_heimdall_proto_rawDescGZIP() []byte {
 	return file_proto_heimdall_proto_rawDescData
 }
 
-var file_proto_heimdall_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_heimdall_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_heimdall_proto_goTypes = []any{
 	(*WriteRequest)(nil),  // 0: heimdall.WriteRequest
 	(*FileMetadata)(nil),  // 1: heimdall.FileMetadata
 	(*WriteResponse)(nil), // 2: heimdall.WriteResponse
 	(*ReadRequest)(nil),   // 3: heimdall.ReadRequest
 	(*ReadResponse)(nil),  // 4: heimdall.ReadResponse
+	(*EmptyRequest)(nil),  // 5: heimdall.EmptyRequest
+	(*VersionList)(nil),   // 6: heimdall.VersionList
+	(*ListResponse)(nil),  // 7: heimdall.ListResponse
+	nil,                   // 8: heimdall.ListResponse.FilesEntry
 }
 var file_proto_heimdall_proto_depIdxs = []int32{
 	1, // 0: heimdall.WriteRequest.metadata:type_name -> heimdall.FileMetadata
-	0, // 1: heimdall.DataService.WriteAction:input_type -> heimdall.WriteRequest
-	3, // 2: heimdall.DataService.ReadAction:input_type -> heimdall.ReadRequest
-	2, // 3: heimdall.DataService.WriteAction:output_type -> heimdall.WriteResponse
-	4, // 4: heimdall.DataService.ReadAction:output_type -> heimdall.ReadResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	8, // 1: heimdall.ListResponse.files:type_name -> heimdall.ListResponse.FilesEntry
+	6, // 2: heimdall.ListResponse.FilesEntry.value:type_name -> heimdall.VersionList
+	0, // 3: heimdall.DataService.WriteAction:input_type -> heimdall.WriteRequest
+	3, // 4: heimdall.DataService.ReadAction:input_type -> heimdall.ReadRequest
+	5, // 5: heimdall.DataService.ListFiles:input_type -> heimdall.EmptyRequest
+	2, // 6: heimdall.DataService.WriteAction:output_type -> heimdall.WriteResponse
+	4, // 7: heimdall.DataService.ReadAction:output_type -> heimdall.ReadResponse
+	7, // 8: heimdall.DataService.ListFiles:output_type -> heimdall.ListResponse
+	6, // [6:9] is the sub-list for method output_type
+	3, // [3:6] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_heimdall_proto_init() }
@@ -378,7 +522,7 @@ func file_proto_heimdall_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_heimdall_proto_rawDesc), len(file_proto_heimdall_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

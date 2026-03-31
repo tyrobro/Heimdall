@@ -6,6 +6,7 @@ option go_package = "./proto";
 service DataService{
     rpc WriteAction (stream WriteRequest) returns (WriteResponse);
     rpc ReadAction (ReadRequest) returns (stream ReadResponse);
+    rpc ListFiles(EmptyRequest) returns (ListResponse);
 }
 
 message WriteRequest {
@@ -32,4 +33,14 @@ message ReadRequest {
 
 message ReadResponse {
     bytes chunk_data = 1;
+}
+
+message EmptyRequest {}
+
+message VersionList {
+    repeated int64 timestamps = 1;
+}
+
+message ListResponse {
+    map<string, VersionList> files = 1;
 }

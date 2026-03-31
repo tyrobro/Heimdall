@@ -35,6 +35,8 @@ func main() {
 		handleUpload(client)
 	case "download":
 		handleDownload(client)
+	case "list":
+		handleList(client)
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
@@ -156,4 +158,20 @@ func handleDownload(client pb.DataServiceClient) {
 	}
 
 	fmt.Printf("Success! Downloaded %d bytes to %s\n", totalBytes, outputPath)
+}
+
+func handleList(client pb.DataServiceClient) {
+	res, err := client.ListFiles(context.Background(), &pb.EmptyRequest{})
+	if err != nil {
+		log.Fatalf("Failed to fetch file list: %v", err)
+	}
+
+	fmt.Println("\n=== Heimdall MVCC File Directory ===")
+	fmt.Printf("%-30s | %s\n", "FILENAME", "AVAILABLE VERSIONS (TS)")
+	fmt.Println("------------------------------------------------------------")
+
+	for fileName, versions := range res.Files {
+		fmt.Printf("%-30s | %v\n", fileName, versions.Timestamps)
+	}
+	fmt.Println("============================================================")
 }

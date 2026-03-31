@@ -5,7 +5,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 
+	"heimdall/core"
 	pb "heimdall/proto"
 
 	"google.golang.org/grpc"
@@ -17,6 +19,8 @@ type gatewayServer struct {
 }
 
 func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) error {
+	opsProcessed.WithLabelValues("write").Inc()
+
 	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
@@ -44,6 +48,8 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 	}
 
 	chunk := packet2.GetChunkData()
+	bytesIngested.Add(float64(len(chunk)))
+
 	var magicBytes []byte
 	if len(chunk) > 512 {
 		magicBytes = chunk[:512]
@@ -51,8 +57,10 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 		magicBytes = chunk
 	}
 
+	start := time.Now()
 	prediction := PredictWorkload(fileName, magicBytes)
-	log.Printf("ML Brain predicted [%s] as: %s", fileName, prediction)
+	inferenceLatency.Observe(time.Since(start).Seconds())
+	log.Printf("🧠 ML Brain predicted [%s] as: %s", fileName, prediction)
 
 	if err := backendStream.Send(packet1); err != nil {
 		return err
@@ -75,6 +83,10 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 			return err
 		}
 
+		if data := req.GetChunkData(); data != nil {
+			bytesIngested.Add(float64(len(data)))
+		}
+
 		if err := backendStream.Send(req); err != nil {
 			return err
 		}
@@ -82,6 +94,8 @@ func (s *gatewayServer) WriteAction(stream pb.DataService_WriteActionServer) err
 }
 
 func (s *gatewayServer) ReadAction(req *pb.ReadRequest, stream pb.DataService_ReadActionServer) error {
+	opsProcessed.WithLabelValues("read").Inc()
+
 	conn, err := grpc.NewClient("localhost:50052", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
@@ -113,11 +127,20 @@ func (s *gatewayServer) ReadAction(req *pb.ReadRequest, stream pb.DataService_Re
 	}
 }
 
-func main() {
-	if err := InitTelemetry(); err != nil {
-		log.Fatalf("Failed to initialize telemetry: %v", err)
+func (s *gatewayServer) ListFiles(ctx context.Context, req *pb.EmptyRequest) (*pb.ListResponse, error) {
+	files, err := core.GetAllFiles()
+	if err != nil {
+		return nil, err
 	}
+	return &pb.ListResponse{Files: files}, nil
+}
+
+func main() {
+	InitTelemetry()
 	defer CloseTelemetry()
+
+	StartMetricsServer()
+	log.Println("Metrics exporter online at http://localhost:2112/metrics")
 
 	port := ":50050"
 	lis, err := net.Listen("tcp", port)

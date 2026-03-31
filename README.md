@@ -2,9 +2,9 @@
 
 > A distributed, low-latency storage engine with heuristic-based routing, built in Go.
 
-Heimdall implements an append-only Write-Ahead Log (WAL) for high-throughput ingestion, Multi-Version Concurrency Control (MVCC) for non-blocking reads, and a gRPC-based streaming gateway. It features an experimental Python inference tier that routes data based on structural file heuristics to optimise caching strategies.
+Heimdall implements an append-only Write-Ahead Log (WAL) for high-throughput ingestion, Multi-Version Concurrency Control (MVCC) for non-blocking reads, and a gRPC-based streaming gateway. It features crash recovery via WAL replay, a live Prometheus metrics endpoint, and an experimental Python inference tier that routes data based on structural file heuristics to optimise caching strategies.
 
-**Core Stack:** Go · Python · gRPC · Protobuf · BoltDB · FastAPI · scikit-learn
+**Core Stack:** Go · Python · gRPC · Protobuf · BoltDB · FastAPI · scikit-learn · Prometheus
 
 ---
 
@@ -24,6 +24,7 @@ Heimdall implements an append-only Write-Ahead Log (WAL) for high-throughput ing
   - [CLI Reference](#cli-reference)
     - [`upload`](#upload)
     - [`download`](#download)
+    - [`list`](#list)
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [1. Go dependencies](#1-go-dependencies)
@@ -92,10 +93,10 @@ flowchart TD
 ## Core Components
 
 ### API Gateway `cmd/gateway`
-The central entry point for all client traffic. Implements Protobuf `oneof` streaming to transmit raw binary payloads in 64KB chunks without buffering the full file in memory, preventing OOM crashes on large files. Enforces a 200ms timeout on the inference tier; failures fall back to a default routing class without interrupting the gRPC stream.
+The central entry point for all client traffic. Implements Protobuf `oneof` streaming to transmit raw binary payloads in 64KB chunks without buffering the full file in memory, preventing OOM crashes on large files. Enforces a 200ms timeout on the inference tier; failures fall back to a default routing class without interrupting the gRPC stream. Exposes a live `/metrics` endpoint on port `2112` via `prometheus/client_golang`, tracking total bytes ingested, read/write volumes, and a latency histogram for ML inference calls.
 
 ### Write Engine `cmd/writenode`
-Accepts chunked streams from the Gateway and appends them sequentially to an append-only WAL. The client connection is released immediately upon WAL acknowledgement. A background goroutine asynchronously flushes completed entries to the BoltDB metadata store, decoupling network ingestion from disk I/O latency.
+Accepts chunked streams from the Gateway and appends them sequentially to an append-only WAL encoded in a strict binary format (Timestamp · Lengths · Payload). The client connection is released immediately upon WAL acknowledgement. A background goroutine asynchronously flushes completed entries to the BoltDB metadata store, decoupling network ingestion from disk I/O latency. On startup, `ReplayWAL()` scans the binary log for any uncommitted transactions from a previous crash and replays them into BoltDB before accepting new writes, guaranteeing durability across restarts.
 
 ### Read Engine `cmd/readnode`
 Serves point-in-time reads using MVCC snapshot isolation. Hot data is served directly from a memory-bounded LRU cache. On a cache miss, historical chunk recipes are fetched from BoltDB and the assembled byte stream is returned to the Gateway.
@@ -106,7 +107,7 @@ A `sync.Mutex`-protected counter that issues monotonically increasing transactio
 ### Inference Tier `ml_service/`
 An experimental FastAPI microservice. Accepts the first 512 bytes of each incoming stream and encodes them into a fixed-length feature vector via `HashingVectorizer`. An `SGDClassifier` predicts whether the file structure correlates with read-heavy or write-heavy telemetry patterns, informing downstream caching strategy. The model retrains asynchronously as new telemetry accumulates.
 
-> **Note:** The inference tier is a proof-of-concept for online-learning telemetry loops. Model accuracy has not yet been formally evaluated. It is not on the critical path — a timeout or crash degrades gracefully to default routing.
+> **Note:** The inference tier is a proof-of-concept for online-learning telemetry loops. Model accuracy has not yet been formally evaluated against a real-world file sample set. It is not on the critical path — a timeout or crash degrades gracefully to default routing.
 
 ---
 
@@ -118,8 +119,13 @@ Protobuf's binary serialisation is significantly more efficient than JSON for ra
 **BoltDB for metadata**
 BoltDB provides a B+Tree structure with full ACID transaction guarantees. The trade-off is an exclusive write lock, which created a severe ingestion bottleneck under concurrent load. This bottleneck directly motivated the WAL: by decoupling the network ingestion path from the BoltDB write lock, the Write Node can absorb bursts of concurrent writes and flush to BoltDB sequentially in the background.
 
+The schema uses a single `FileMeta` bucket keyed by filename, with each value being a JSON-serialised `FileHistory` struct containing the full version array. This keeps all version history for a file co-located under one key, avoiding cross-key joins on reads. The `GetAllFiles` traversal is written to be fault-tolerant — malformed or legacy rows (e.g. from schema migrations) are logged and skipped rather than crashing the query.
+
 **Python for the inference tier**
 scikit-learn's SGDClassifier and the `partial_fit` API for incremental learning have no mature equivalent in the Go ecosystem. The trade-off is a network hop on the hot path (HTTP over localhost). This is mitigated by the 200ms timeout and graceful fallback, ensuring the ML tier cannot become a bottleneck or single point of failure for storage operations.
+
+**Prometheus for observability**
+Rather than parsing stdout logs to understand system behaviour, the Gateway exposes a `/metrics` endpoint on port `2112`. This allows Prometheus to scrape live counters and histograms, and crucially makes the 200ms ML timeout circuit-breaker verifiable — the inference latency histogram shows exactly where requests are falling on the distribution, not just whether the fallback fired.
 
 ---
 
@@ -181,6 +187,34 @@ go run cmd/client/main.go download my_dataset.csv 1 ./restored/my_dataset_v1.csv
 
 ---
 
+### `list`
+
+Queries the `FileMeta` BoltDB bucket and prints every tracked filename alongside its full MVCC version history. Provides direct, human-readable proof that the system is correctly recording and persisting version timestamps.
+
+```bash
+go run cmd/client/main.go list
+```
+
+No arguments required.
+
+**Example**
+
+```bash
+go run cmd/client/main.go list
+
+# Files stored in Heimdall:
+# ─────────────────────────────────────────
+#  my_dataset.csv      versions: [1, 2, 3]
+#  report.pdf          versions: [1]
+#  config.json         versions: [1, 2]
+# ─────────────────────────────────────────
+# Total: 3 file(s)
+```
+
+**Schema resilience:** The `GetAllFiles` traversal is fault-tolerant. If a row in BoltDB contains malformed data or was written by a prior schema version, the anomaly is logged and the row is skipped rather than returning a fatal error. The remainder of the file list renders correctly.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -231,12 +265,14 @@ go run cmd/readnode/main.go
 ### 4. Run the test suite
 
 ```bash
-# Unit tests — Oracle monotonicity + LRU eviction
+# Unit tests — Oracle monotonicity, LRU eviction, WAL crash recovery
 go test ./core/...
 
 # End-to-end integration test — byte-for-byte upload/download correctness
 go run test_cluster.go
 ```
+
+`TestWALRecovery` simulates a dirty crash by writing entries to the WAL, terminating before the BoltDB flush, and verifying that `ReplayWAL()` on reboot recovers all data correctly.
 
 ---
 
@@ -264,23 +300,20 @@ The speedup reflects the mechanical advantage of sequential I/O over random disk
 |---|---|
 | **Inference service crash or timeout** | Gateway falls back to `Unknown` routing class. gRPC stream continues uninterrupted. |
 | **Gateway crash** | All cluster traffic halts. The Gateway is currently a single instance with no failover. |
-| **Write Node crash before WAL flush** | WAL data is retained on disk. A WAL replay script (currently unimplemented) is required to recover pending entries on reboot. |
+| **Write Node crash before WAL flush** | WAL data is retained on disk in binary format. `ReplayWAL()` automatically replays uncommitted transactions into BoltDB on the next startup. Verified by `TestWALRecovery`. |
 
 ---
 
 ## Known Limitations & Future Work
 
-**WAL crash recovery**
-The WAL retains data on disk across crashes, but a replay-on-reboot mechanism has not yet been implemented. This is the most significant gap in the current durability model.
-
 **ML validation gate**
-The continuous learning loop retrains on incoming telemetry without a held-out validation set, and model accuracy has not been formally measured. A degraded telemetry batch can silently reduce routing quality with no observable signal. Future iterations should introduce a labelled evaluation set of real file samples and enforce an accuracy threshold check before hot-swapping model weights.
+The continuous learning loop retrains on incoming telemetry without a held-out validation set, and model accuracy has not been formally measured against real file samples. A degraded telemetry batch can silently reduce routing quality with no observable signal. Future iterations should introduce a labelled evaluation set of real file types and enforce an accuracy threshold check before hot-swapping model weights.
 
 **Cluster consensus**
 Nodes are addressed via hardcoded localhost ports. Production deployment requires service discovery (e.g., Consul) and a consensus protocol (e.g., Raft) for leader election and node health management.
 
 **Observability**
-The cluster logs to stdout. There is no `/metrics` endpoint for Prometheus scraping and no structured JSON logging for Grafana integration.
+The cluster exposes Prometheus metrics but currently lacks structured JSON logging for Grafana/Loki integration. Log lines are written to stdout in plain text.
 
 **Network failure injection**
 The integration test suite covers the happy-path upload/download cycle. Fault injection (e.g., mid-stream node crashes, network partitions) is a known gap.
@@ -291,16 +324,17 @@ The integration test suite covers the happy-path upload/download cycle. Fault in
 
 ```
 ├── cmd/
-│   ├── client/       # CLI — upload and download commands
-│   ├── gateway/      # API Gateway, telemetry logger, inference client
+│   ├── client/       # CLI — upload, download, list commands
+│   ├── gateway/      # API Gateway, telemetry logger, inference client, /metrics
 │   ├── readnode/     # Read Engine, LRU cache
-│   └── writenode/    # Write Engine, WAL
+│   └── writenode/    # Write Engine, WAL, ReplayWAL
 ├── core/             # Shared: Vault, Timestamp Oracle, LRU Cache, WAL
 ├── ml_service/       # Python FastAPI inference server, retraining loop
 ├── proto/            # Protobuf definitions (heimdall.proto)
 ├── go.mod            # Go module dependencies
 ├── requirements.txt  # Pinned Python dependencies
-└── test_cluster.go   # End-to-end integration test suite
+├── test_cluster.go   # End-to-end integration test suite
+└── ARCHITECTURE.md   # Byte-level WAL format, BoltDB schema, Protobuf contracts
 ```
 
 ---
